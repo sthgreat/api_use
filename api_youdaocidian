@@ -1,0 +1,124 @@
+# /usr/bin/env python
+# coding=utf8
+
+
+import re
+from http import client
+import hashlib
+import nltk
+import random
+import json
+from pathlib import Path
+
+
+class Translate(object):
+    def __init__(self):
+        self.appkey = '32fa5cb8180f35a5'  # app id
+        self.secretkey = 'p0nqy6e6QJxS7SlwgIWWEvA1o10Et8Hx'
+        self.salt = random.randint(1, 65536)  # random number
+        self.httpClient = None
+
+    def translate(self, q):
+        sign = self._generate_sign(q)
+        url = f'http://openapi.youdao.com/api?q={q}&from=EN&to=zh_CHS&appKey={self.appkey}&salt={self.salt}&sign={sign}'
+        # print(f'url: {url}')
+        try:
+            self.httpClient = client.HTTPConnection('openapi.youdao.com')
+            self.httpClient.request('GET', url)
+
+            # response是HTTPResponse对象
+            response = self.httpClient.getresponse()
+            return self._parse(response)
+
+        except Exception as e:
+            # print(q, e)
+            pass
+
+        finally:
+            if self.httpClient:
+                self.httpClient.close()
+
+    def _parse(self, jsn):
+        res = json.loads(jsn.read().decode('utf-8'))
+        translated = res.get('web')[0].get('value')
+        return translated
+
+    def _generate_sign(self, q):
+        """
+        1. 将请求参数中的 appKey，翻译文本 q (注意为UTF-8编码)，随机数 salt 和密钥，
+        按照 appKey+q+salt+密钥 的顺序拼接得到字符串 str。
+        2. 对字符串 str 做md5，得到32位大写的 sign
+        """
+        sign = f'{self.appkey}{q}{self.salt}{self.secretkey}'.encode('utf-8')
+        m1 = hashlib.md5()
+        m1.update(sign)
+        return m1.hexdigest()
+
+
+def translate_sent_word(src):
+    k = 0
+    src = Path(src)
+    dest = f'{src.parent}/{src.stem}.zh{src.suffix}'
+    translator = Translate()
+
+    with Path(src).open('r') as fin, Path(dest).open('w') as fout:
+        for line in fin:
+            k += 1
+            splited = line.split('\t')
+            if splited[1] == 'Null':
+                continue
+
+            zh = []
+            words = splited[2].split(',')
+
+            for w in words:
+                transed = translator.translate(w)
+                if not transed == None:  # skip NoneType
+                    zh.append(transed[0])
+                # print(words, w, transed, sep = '\t')
+
+            # print(words, zh, sep = '\t')
+            zh = ','.join(zh)
+            if len(zh) == 0:
+                splited[2] = ','.join(words)
+            else:
+                splited[2] = zh
+            fout.write('\t'.join(splited))
+            if k % 100 == 0:
+                print("processed {}00 lines.".format(int(k / 100)))
+
+
+def main(word):
+    t = Translate()
+    translated = t.translate(word)
+    return translated[0]
+
+    # src = ['../Data/effectwordnet/goldStandard.tff',
+    # '../Data/effectwordnet/EffectWordNet.tff']
+    # for s in src:
+    #     translate_sent_word(s)
+
+
+if __name__ == '__main__':
+    with open(r'C:\Users\Administrator.PC-201801041552\Desktop\暑期工作\有道翻译\effectwordnet\effectwordnet\goldStandard.tff', 'r') as f:
+        for i in f:
+            return_li =[]
+            mid_li = []
+            li_line = i.split('\t')
+            k = re.sub(r'".*?"', '', li_line[3])
+            text = nltk.word_tokenize(k)
+            li_words = nltk.pos_tag(text, tagset='universal')
+            for word in li_words:
+                if 'ADJ' in word:
+                    mid_li.append(word[0])
+            if len(mid_li) == 0:
+                return_li.append('原始解释中无形容词')
+            else:
+                for word in mid_li:
+                    try:
+                        return_li.append(main(word))
+                    except:
+                        return_li.append('原始解释中无形容词')
+            with open(r'C:\Users\Administrator.PC-201801041552\Desktop\暑期工作\有道翻译\effectwordnet\effectwordnet\goldStandard_processed.tff', 'a', encoding='utf-8') as f2:
+                str_translated = ' '.join(return_li)
+                f2.write(li_line[0] + '\t' + li_line[1] + '\t' + li_line[2] + '\t' + str_translated + '\n')
