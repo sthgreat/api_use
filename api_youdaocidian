@@ -13,8 +13,8 @@ from pathlib import Path
 
 class Translate(object):
     def __init__(self):
-        self.appkey = '32fa5cb8180f35a5'  # app id
-        self.secretkey = 'p0nqy6e6QJxS7SlwgIWWEvA1o10Et8Hx'
+        self.appkey = ''  # app id
+        self.secretkey = ''
         self.salt = random.randint(1, 65536)  # random number
         self.httpClient = None
 
