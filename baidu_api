@@ -1,0 +1,73 @@
+# coding:utf8
+# 调用百度翻译api
+
+import requests
+import json
+import hashlib
+import random
+import re
+import jieba
+import jieba.posseg as pseg
+import xlwt
+
+def translate(key):
+    q = key
+    fromd = "auto"
+    tos = "zh"
+    appid = 
+    secrkey = ''
+    salt = random.randint(32768, 65536)
+    sign = str(appid) + q + str(salt) + secrkey
+    signs = hashlib.md5(bytes(sign,encoding='utf8')).hexdigest()
+    # print(signs)
+    url = "http://api.fanyi.baidu.com/api/trans/vip/translate?q=%s&from=%s&to=%s&appid=%d&salt=%d&sign=%s" % (q,fromd,tos,appid,salt,signs)
+
+    response = requests.get(url)  #发的是post请求，data是urlencode以后的编码
+    # response = urllib2.urlopen(requeset)
+    data_json = response.content
+    # print(data_json)
+    data = json.loads(data_json)  #把json转换成python字典
+    # print(data)
+    datw = data['trans_result'][0]
+    src = datw["src"]
+    dst = datw["dst"]
+    # print(src,dst)
+    return dst
+
+
+if __name__ == '__main__':
+    # 可能需要增加自定义字典
+    jieba.posseg.POSTokenizer(tokenizer=None)
+
+    wbk = xlwt.Workbook()
+    sheet = wbk.add_sheet('goldStandard_processed')
+
+    with open(r'C:\Users\Administrator.PC-201801041552\Desktop\暑期工作\有道翻译\effectwordnet\effectwordnet\goldStandard.tff', 'r') as f:
+        row = 0
+        for i in f:
+            li_line = i.split('\t')
+            k = re.sub(r'".*?"', '', li_line[3])
+            k2 = k.replace(';', '')
+            zh_sentence = translate(k2)
+            print(zh_sentence)
+
+            processed_word_li = []
+            seg_word = pseg.cut(zh_sentence)
+            for word, cixing in seg_word:
+                if cixing == 'a' or cixing == 'ad' or cixing == 'an' or cixing == 'ag' or cixing == 'al':
+                    processed_word_li.append(word)
+
+            processed_setence = ' '.join(processed_word_li)
+            if len(processed_setence) == 0:
+                processed_setence = '原始翻译没有形容词'
+                
+            sheet.write(row, 0, li_line[0])
+            sheet.write(row, 1, li_line[1])
+            sheet.write(row, 2, li_line[2])
+            sheet.write(row, 3, k2)
+            sheet.write(row, 4, zh_sentence)
+            sheet.write(row, 5, processed_setence)
+
+            row += 1
+
+    wbk.save(r'C:\Users\Administrator.PC-201801041552\Desktop\暑期工作\有道翻译\effectwordnet\effectwordnet\processed_goldStandard.xls')
